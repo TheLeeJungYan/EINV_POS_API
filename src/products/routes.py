@@ -8,6 +8,7 @@ from src.database.main import get_db
 product_router = APIRouter()
 
 
-@product_router.get('/products',response_model=List[Product])
+@product_router.get('/products')
 async def get_products(db:Session = Depends(get_db)):
-    return db.query(PRODUCTS).all()
+    products = db.query(PRODUCTS).all()
+    return products
