@@ -13,3 +13,7 @@ async def get_products(db:Session = Depends(get_db)):
     products = db.query(PRODUCTS).all()
     return products
 
+@product_router.post('/create_transaction')
+async def create_transaction(db:Session = Depends(get_db)):
+    return 'success'
+

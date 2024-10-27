@@ -2,11 +2,6 @@ from sqlalchemy import Boolean, String, Integer, TIMESTAMP, Column, ForeignKey, 
 from sqlalchemy.orm import relationship
 from src.database.main import Base
 
-# Association table for PRODUCTS and PRODUCT_OPTIONS
-product_options_association = Table('product_options_association', Base.metadata,
-    Column('product_id', Integer, ForeignKey('PRODUCTS.ID')),
-    Column('option_id', Integer, ForeignKey('PRODUCT_OPTIONS.ID'))
-)
 
 class COMPANIES(Base):
     __tablename__ = 'COMPANIES'
@@ -20,8 +15,6 @@ class COMPANIES(Base):
     LAST_LOGIN_AT = Column(TIMESTAMP)
     CREATED_AT = Column(TIMESTAMP)
 
-    products = relationship("PRODUCTS", back_populates="company")
-
 class PRODUCTS(Base):
     __tablename__ = 'PRODUCTS'
     ID = Column(Integer, primary_key=True, index=True)
@@ -34,9 +27,6 @@ class PRODUCTS(Base):
     UPDATED_AT = Column(TIMESTAMP)
     DELETED_AT = Column(TIMESTAMP)
 
-    company = relationship("COMPANIES", back_populates="products")
-    options = relationship("PRODUCT_OPTIONS", secondary=product_options_association, back_populates="products")
-    transactions = relationship("TRANSACTIONS", back_populates="product")
 
 class CATEGORIES(Base):
     __tablename__ = 'CATEGORIES'
@@ -56,27 +46,23 @@ class TRANSACTIONS(Base):
     SELECTED_OPTIONS = Column(JSON)
     CREATED_AT = Column(TIMESTAMP)
 
-    company = relationship("COMPANIES")
-    product = relationship("PRODUCTS", back_populates="transactions")
 
 class PRODUCT_OPTIONS(Base):
     __tablename__ = 'PRODUCT_OPTIONS'
     ID = Column(Integer, primary_key=True, index=True)
-    NAME = Column(String(255), nullable=False)
+    PRODUCT_ID = Column(Integer, ForeignKey('PRODUCTS.ID'))
+    OPTION = Column(String(255), nullable=False)
     CREATED_AT = Column(TIMESTAMP)
     UPDATED_AT = Column(TIMESTAMP)
     DELETED_AT = Column(TIMESTAMP)
-
-    products = relationship("PRODUCTS", secondary=product_options_association, back_populates="options")
-    option_values = relationship("PRODUCT_OPTION_VALUES", back_populates="option")
 
 class PRODUCT_OPTION_VALUES(Base):
-    __tablename__ = 'PRODUCT_OPTION_VALUES'
+    __tablename__ = "PRODUCT_OPTION_VALUES"
     ID = Column(Integer, primary_key=True, index=True)
-    OPTION_ID = Column(Integer, ForeignKey('PRODUCT_OPTIONS.ID'))
-    VALUE = Column(String(255), nullable=False)
+    OPTION_ID= Column(Integer, ForeignKey('PRODUCT_OPTIONS.ID'))
+    VALUE = Column(String(255),nullable=False)
+    PRICE = Column(Integer,nullable=False)
+    DEFAULT = Column(Boolean,nullable=False)
     CREATED_AT = Column(TIMESTAMP)
     UPDATED_AT = Column(TIMESTAMP)
     DELETED_AT = Column(TIMESTAMP)
-
-    option = relationship("PRODUCT_OPTIONS", back_populates="option_values")
