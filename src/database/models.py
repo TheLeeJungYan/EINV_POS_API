@@ -1,6 +1,12 @@
-from sqlalchemy import Boolean, String, Integer, TIMESTAMP, Column, ForeignKey
+from sqlalchemy import Boolean, String, Integer, TIMESTAMP, Column, ForeignKey, JSON, Table
 from sqlalchemy.orm import relationship
 from src.database.main import Base
+
+# Association table for PRODUCTS and PRODUCT_OPTIONS
+product_options_association = Table('product_options_association', Base.metadata,
+    Column('product_id', Integer, ForeignKey('PRODUCTS.ID')),
+    Column('option_id', Integer, ForeignKey('PRODUCT_OPTIONS.ID'))
+)
 
 class COMPANIES(Base):
     __tablename__ = 'COMPANIES'
@@ -14,6 +20,8 @@ class COMPANIES(Base):
     LAST_LOGIN_AT = Column(TIMESTAMP)
     CREATED_AT = Column(TIMESTAMP)
 
+    products = relationship("PRODUCTS", back_populates="company")
+
 class PRODUCTS(Base):
     __tablename__ = 'PRODUCTS'
     ID = Column(Integer, primary_key=True, index=True)
@@ -26,8 +34,9 @@ class PRODUCTS(Base):
     UPDATED_AT = Column(TIMESTAMP)
     DELETED_AT = Column(TIMESTAMP)
 
-    company = relationship("COMPANIES")
-    option_mappings = relationship("PRODUCT_OPTION_MAPPINGS")
+    company = relationship("COMPANIES", back_populates="products")
+    options = relationship("PRODUCT_OPTIONS", secondary=product_options_association, back_populates="products")
+    transactions = relationship("TRANSACTIONS", back_populates="product")
 
 class CATEGORIES(Base):
     __tablename__ = 'CATEGORIES'
@@ -44,11 +53,11 @@ class TRANSACTIONS(Base):
     COMPANY_ID = Column(Integer, ForeignKey('COMPANIES.ID'))
     PRODUCT_ID = Column(Integer, ForeignKey('PRODUCTS.ID'))
     AMOUNT = Column(Integer)
+    SELECTED_OPTIONS = Column(JSON)
     CREATED_AT = Column(TIMESTAMP)
 
     company = relationship("COMPANIES")
-    product = relationship("PRODUCTS")
-    option_selections = relationship("TRANSACTION_OPTION_SELECTIONS")
+    product = relationship("PRODUCTS", back_populates="transactions")
 
 class PRODUCT_OPTIONS(Base):
     __tablename__ = 'PRODUCT_OPTIONS'
@@ -58,8 +67,8 @@ class PRODUCT_OPTIONS(Base):
     UPDATED_AT = Column(TIMESTAMP)
     DELETED_AT = Column(TIMESTAMP)
 
-    option_values = relationship("PRODUCT_OPTION_VALUES")
-    product_mappings = relationship("PRODUCT_OPTION_MAPPINGS")
+    products = relationship("PRODUCTS", secondary=product_options_association, back_populates="options")
+    option_values = relationship("PRODUCT_OPTION_VALUES", back_populates="option")
 
 class PRODUCT_OPTION_VALUES(Base):
     __tablename__ = 'PRODUCT_OPTION_VALUES'
@@ -70,28 +79,4 @@ class PRODUCT_OPTION_VALUES(Base):
     UPDATED_AT = Column(TIMESTAMP)
     DELETED_AT = Column(TIMESTAMP)
 
-    option = relationship("PRODUCT_OPTIONS")
-
-class PRODUCT_OPTION_MAPPINGS(Base):
-    __tablename__ = 'PRODUCT_OPTION_MAPPINGS'
-    ID = Column(Integer, primary_key=True, index=True)
-    PRODUCT_ID = Column(Integer, ForeignKey('PRODUCTS.ID'))
-    OPTION_ID = Column(Integer, ForeignKey('PRODUCT_OPTIONS.ID'))
-    CREATED_AT = Column(TIMESTAMP)
-    UPDATED_AT = Column(TIMESTAMP)
-    DELETED_AT = Column(TIMESTAMP)
-
-    product = relationship("PRODUCTS")
-    option = relationship("PRODUCT_OPTIONS")
-
-class TRANSACTION_OPTION_SELECTIONS(Base):
-    __tablename__ = 'TRANSACTION_OPTION_SELECTIONS'
-    ID = Column(Integer, primary_key=True, index=True)
-    TRANSACTION_ID = Column(Integer, ForeignKey('TRANSACTIONS.ID'))
-    OPTION_ID = Column(Integer, ForeignKey('PRODUCT_OPTIONS.ID'))
-    OPTION_VALUE_ID = Column(Integer, ForeignKey('PRODUCT_OPTION_VALUES.ID'))
-    CREATED_AT = Column(TIMESTAMP)
-
-    transaction = relationship("TRANSACTIONS")
-    option = relationship("PRODUCT_OPTIONS")
-    option_value = relationship("PRODUCT_OPTION_VALUES")
+    option = relationship("PRODUCT_OPTIONS", back_populates="option_values")
