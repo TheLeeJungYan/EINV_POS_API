@@ -12,3 +12,4 @@ product_router = APIRouter()
 async def get_products(db:Session = Depends(get_db)):
     products = db.query(PRODUCTS).all()
     return products
+
