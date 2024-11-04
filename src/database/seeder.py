@@ -5,11 +5,26 @@ from src.database.models import (
     PAYMENT_TYPES, PRODUCT_OPTIONS, PRODUCT_OPTION_VALUES,
     TRANSACTIONS
 )
-from werkzeug.security import generate_password_hash
+from src.login.security import SecurityManager
+
+# Use this secret key across your application
+SECRET_KEY = "vn8K9pZ2Rj4Mx5Ly3Qw7"  # 20 characters, mix of letters and numbers
+security_manager = SecurityManager(SECRET_KEY)
 
 def seed_database():
     db = SessionLocal()
     try:
+        # Clear existing data (optional, but helps prevent duplicates)
+        db.query(TRANSACTIONS).delete()
+        db.query(PRODUCT_OPTION_VALUES).delete()
+        db.query(PRODUCT_OPTIONS).delete()
+        db.query(PRODUCTS).delete()
+        db.query(CATEGORIES).delete()
+        db.query(USERS).delete()
+        db.query(COMPANIES).delete()
+        db.query(PAYMENT_TYPES).delete()
+        db.query(USER_TYPES).delete()
+        
         # 1. Seed User Types
         print("Seeding user types...")
         user_types = [
@@ -98,7 +113,7 @@ def seed_database():
         superadmin = USERS(
             USERNAME="superadmin",
             EMAIL="superadmin@example.com",
-            PASSWORD=generate_password_hash("superadmin123"),
+            PASSWORD=security_manager.hash_password("superadmin123"),
             USER_TYPE_ID=user_types[0].ID,  # SUPERADMIN type
             CREATED_AT=datetime.now(),
             UPDATED_AT=datetime.now()
@@ -131,7 +146,7 @@ def seed_database():
         admin = USERS(
             USERNAME="admin",
             EMAIL="admin@example.com",
-            PASSWORD=generate_password_hash("admin123"),
+            PASSWORD=security_manager.hash_password("admin123"),
             USER_TYPE_ID=user_types[1].ID,  # ADMIN type
             COMPANY_ID=company.ID,
             CREATED_AT=datetime.now(),
@@ -142,7 +157,7 @@ def seed_database():
         user = USERS(
             USERNAME="user",
             EMAIL="user@example.com",
-            PASSWORD=generate_password_hash("user123"),
+            PASSWORD=security_manager.hash_password("user123"),
             USER_TYPE_ID=user_types[2].ID,  # USER type
             COMPANY_ID=company.ID,
             CREATED_AT=datetime.now(),
@@ -254,6 +269,7 @@ def seed_database():
     except Exception as e:
         print(f"Error seeding database: {e}")
         db.rollback()
+        raise  # Re-raise the exception to see the full error
     finally:
         db.close()
 

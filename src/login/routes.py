@@ -5,12 +5,13 @@ from .main import LoginSystem
 from .security import SecurityManager
 from src.database.main import get_db
 from typing import Dict
+from src.database.seeder import SECRET_KEY  # Import the same secret key
 
-# Create the FastAPI app instance
+
 app = FastAPI()
 
 router = APIRouter()
-security_manager = SecurityManager("your-secret-key-here")  # Use environment variable in production
+security_manager = SecurityManager(SECRET_KEY)
 
 @router.post("/login", response_model=LoginResponse)
 async def login(
