@@ -113,7 +113,7 @@ def seed_database():
         superadmin = USERS(
             USERNAME="superadmin",
             EMAIL="superadmin@example.com",
-            PASSWORD=security_manager.hash_password("superadmin123"),
+            PASSWORD=security_manager.hash_password("SuperAdmin123!"),
             USER_TYPE_ID=user_types[0].ID,  # SUPERADMIN type
             CREATED_AT=datetime.now(),
             UPDATED_AT=datetime.now()
@@ -125,7 +125,7 @@ def seed_database():
         print("Seeding company...")
         company = COMPANIES(
             OWNER_FULL_NAME="John Doe",
-            OWNER_IC_NUMBER="123456789",
+            OWNER_IC_NUMBER="123456-78-9012",  # Updated to match format
             OWNER_BIRTH_DATE=date(1990, 1, 1),
             PHONE_NUMBER="+60123456789",
             ADDRESS_LINE1="123 Main Street",
@@ -146,7 +146,7 @@ def seed_database():
         admin = USERS(
             USERNAME="admin",
             EMAIL="admin@example.com",
-            PASSWORD=security_manager.hash_password("admin123"),
+            PASSWORD=security_manager.hash_password("Admin123!"),
             USER_TYPE_ID=user_types[1].ID,  # ADMIN type
             COMPANY_ID=company.ID,
             CREATED_AT=datetime.now(),
@@ -157,7 +157,7 @@ def seed_database():
         user = USERS(
             USERNAME="user",
             EMAIL="user@example.com",
-            PASSWORD=security_manager.hash_password("user123"),
+            PASSWORD=security_manager.hash_password("User123!"),
             USER_TYPE_ID=user_types[2].ID,  # USER type
             COMPANY_ID=company.ID,
             CREATED_AT=datetime.now(),
