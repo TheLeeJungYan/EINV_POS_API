@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
-from sqlalchemy.orm import Session
-from src.database.models import COMPANIES, USERS
-from sqlalchemy import select, or_
+from sqlalchemy.orm import Session, joinedload
+from src.database.models import COMPANIES, USERS, USER_TYPES
+from sqlalchemy import select, or_, join
 from .schemas import LoginRequest, RegistrationRequest, LoginResponse, RegistrationResponse
 from .exceptions import LoginError, ValidationError, AuthenticationError, RegistrationError, AuthorizationError,InternalServerError
 from .validators import DataValidator
@@ -18,8 +18,11 @@ class LoginSystem:
     async def login(self, request: LoginRequest, ip_address: str) -> LoginResponse:
         """Handle login request"""
         try:
-            # Query for user (changed from COMPANIES to USERS)
-            stmt = select(USERS).where(
+            # Query for user with join to USER_TYPES
+            stmt = select(USERS, USER_TYPES).join(
+                USER_TYPES,
+                USERS.USER_TYPE_ID == USER_TYPES.ID
+            ).where(
                 or_(
                     USERS.USERNAME == request.username_or_email,
                     USERS.EMAIL == request.username_or_email
@@ -30,23 +33,11 @@ class LoginSystem:
             if not result:
                 raise AuthorizationError("Invalid username or password")
                 return
-                # return LoginResponse(
-                #     success=False,
-                #     message="Invalid username or password",
-                #     data=None,
-                #     status_code=status.HTTP_401_UNAUTHORIZED
-                # )
 
-            user = result[0]  # Get the user object
+            user, user_type = result  # Get both user and user_type objects
             if not self.security.verify_password(request.password, user.PASSWORD):
                 raise AuthorizationError("Invalid username or password")
                 return
-                # return LoginResponse(
-                #     success=False,
-                #     message="Invalid username or password",
-                #     data=None,
-                #     status_code=status.HTTP_401_UNAUTHORIZED
-                # )
 
             # Get company info if user has company_id
             company_info = None
@@ -75,7 +66,11 @@ class LoginSystem:
                         "id": user.ID,
                         "username": user.USERNAME,
                         "email": user.EMAIL,
-                        "type_id": user.USER_TYPE_ID  # Changed to USER_TYPE_ID
+                        "type_id": user.USER_TYPE_ID,
+                        "user_type": {
+                            "id": user_type.ID,
+                            "name": user_type.NAME
+                        }
                     },
                     "company": company_info,
                     "access_token": access_token
