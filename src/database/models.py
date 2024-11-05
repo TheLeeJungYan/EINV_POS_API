@@ -2,15 +2,16 @@ from sqlalchemy import Boolean, String, Integer, TIMESTAMP, Column, ForeignKey, 
 from sqlalchemy.orm import relationship
 from src.database.main import Base
 
+class USER_TYPES(Base):
+    __tablename__ = 'USER_TYPES'
+    ID = Column(Integer, primary_key=True, index=True)
+    NAME = Column(String(50), unique=True, nullable=False)  # 'SUPERADMIN', 'ADMIN', 'USER'
+    CREATED_AT = Column(TIMESTAMP)
+    UPDATED_AT = Column(TIMESTAMP)
 
 class COMPANIES(Base):
     __tablename__ = 'COMPANIES'
     ID = Column(Integer, primary_key=True, index=True)
-    NAME = Column(String(255), unique=True)
-    USERNAME = Column(String(255), unique=True)
-    EMAIL = Column(String(255), unique=True)
-    PASSWORD = Column(String(255))
-    
     # Owner Information
     OWNER_FULL_NAME = Column(String(255), nullable=False)
     OWNER_IC_NUMBER = Column(String(20), nullable=False, unique=True)
@@ -39,6 +40,26 @@ class COMPANIES(Base):
     CREATED_AT = Column(TIMESTAMP)
     UPDATED_AT = Column(TIMESTAMP)
 
+class USERS(Base):
+    __tablename__ = 'USERS'
+    ID = Column(Integer, primary_key=True, index=True)
+    USERNAME = Column(String(255), unique=True)
+    EMAIL = Column(String(255), unique=True)
+    PASSWORD = Column(String(255))
+    USER_TYPE_ID = Column(Integer, ForeignKey('USER_TYPES.ID'))  # Changed to match seeder
+    COMPANY_ID = Column(Integer, ForeignKey('COMPANIES.ID'), nullable=True)
+    CREATED_AT = Column(TIMESTAMP)
+    UPDATED_AT = Column(TIMESTAMP)
+
+class CATEGORIES(Base):
+    __tablename__ = 'CATEGORIES'
+    ID = Column(Integer, primary_key=True, index=True)
+    NAME = Column(String(255))
+    ICON = Column(String(255))
+    CREATED_AT = Column(TIMESTAMP)
+    UPDATED_AT = Column(TIMESTAMP)
+    DELETED_AT = Column(TIMESTAMP)
+
 class PRODUCTS(Base):
     __tablename__ = 'PRODUCTS'
     ID = Column(Integer, primary_key=True, index=True)
@@ -51,25 +72,24 @@ class PRODUCTS(Base):
     UPDATED_AT = Column(TIMESTAMP)
     DELETED_AT = Column(TIMESTAMP)
 
-
-class CATEGORIES(Base):
-    __tablename__ = 'CATEGORIES'
+class PAYMENT_TYPES(Base):  # Renamed from TRANSACTION_TYPES
+    __tablename__ = 'PAYMENT_TYPES'
     ID = Column(Integer, primary_key=True, index=True)
-    NAME = Column(String(255))
-    ICON = Column(String(255))
+    NAME = Column(String(50), unique=True, nullable=False)  # 'CASH', 'TNG', 'CREDIT_CARD', etc.
+    IS_ACTIVE = Column(Boolean, default=True)  # To enable/disable payment methods
     CREATED_AT = Column(TIMESTAMP)
     UPDATED_AT = Column(TIMESTAMP)
-    DELETED_AT = Column(TIMESTAMP)
 
 class TRANSACTIONS(Base):
     __tablename__ = 'TRANSACTIONS'
     ID = Column(Integer, primary_key=True, index=True)
     COMPANY_ID = Column(Integer, ForeignKey('COMPANIES.ID'))
     PRODUCT_ID = Column(Integer, ForeignKey('PRODUCTS.ID'))
+    PAYMENT_TYPE_ID = Column(Integer, ForeignKey('PAYMENT_TYPES.ID'))  # Changed from TRANSACTION_TYPE_ID
     AMOUNT = Column(Integer)
     SELECTED_OPTIONS = Column(JSON)
+    PAYMENT_REFERENCE = Column(String(255), nullable=True)  # For payment references/receipts
     CREATED_AT = Column(TIMESTAMP)
-
 
 class PRODUCT_OPTIONS(Base):
     __tablename__ = 'PRODUCT_OPTIONS'

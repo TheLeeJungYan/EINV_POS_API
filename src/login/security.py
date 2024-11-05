@@ -1,11 +1,9 @@
-# src/login/security.py
-
 import bcrypt
 import hashlib
 import base64
 from typing import Dict, Any, Optional
 import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from .exceptions import AuthenticationError, SecurityError
 import re
 from jwt.exceptions import InvalidTokenError
@@ -140,7 +138,7 @@ class SecurityManager:
         """
         try:
             to_encode = data.copy()
-            issued_at = datetime.datetime.now(datetime.timezone.utc)
+            issued_at = datetime.now(timezone.utc)  # Fixed datetime usage
             expiration = issued_at + (expires_delta or self.DEFAULT_TOKEN_EXPIRY)
             
             # Add security claims
@@ -148,7 +146,7 @@ class SecurityManager:
                 "exp": expiration,
                 "iat": issued_at,
                 "type": "access",
-                "jti": hashlib.sha256(str(issued_at.timestamp()).encode()).hexdigest()  # Unique token ID
+                "jti": hashlib.sha256(str(issued_at.timestamp()).encode()).hexdigest()
             })
             
             return jwt.encode(
@@ -156,7 +154,7 @@ class SecurityManager:
                 self.secret_key,
                 algorithm="HS256",
                 headers={
-                    "kid": "v1",  # Key ID for key rotation
+                    "kid": "v1",
                     "typ": "JWT"
                 }
             )
