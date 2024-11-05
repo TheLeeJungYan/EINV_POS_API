@@ -3,11 +3,11 @@ from sqlalchemy.orm import Session
 from src.database.models import COMPANIES, USERS
 from sqlalchemy import select, or_
 from .schemas import LoginRequest, RegistrationRequest, LoginResponse, RegistrationResponse
-from .exceptions import LoginError, ValidationError, AuthenticationError, RegistrationError
+from .exceptions import LoginError, ValidationError, AuthenticationError, RegistrationError, AuthorizationError,InternalServerError
 from .validators import DataValidator
 from .security import SecurityManager
 from typing import Dict, Any
-from fastapi import status
+
 class LoginSystem:
     def __init__(self, db_session: Session, security_manager: SecurityManager):
         """Initialize login system with database session and security manager"""
@@ -28,21 +28,25 @@ class LoginSystem:
             result = self.db.execute(stmt).first()
 
             if not result:
-                return LoginResponse(
-                    success=False,
-                    message="Invalid username or password",
-                    data=None,
-                    status_code=status.HTTP_401_UNAUTHORIZED
-                )
+                raise AuthorizationError("Invalid username or password")
+                return
+                # return LoginResponse(
+                #     success=False,
+                #     message="Invalid username or password",
+                #     data=None,
+                #     status_code=status.HTTP_401_UNAUTHORIZED
+                # )
 
             user = result[0]  # Get the user object
             if not self.security.verify_password(request.password, user.PASSWORD):
-                return LoginResponse(
-                    success=False,
-                    message="Invalid username or password",
-                    data=None,
-                    status_code=status.HTTP_401_UNAUTHORIZED
-                )
+                raise AuthorizationError("Invalid username or password")
+                return
+                # return LoginResponse(
+                #     success=False,
+                #     message="Invalid username or password",
+                #     data=None,
+                #     status_code=status.HTTP_401_UNAUTHORIZED
+                # )
 
             # Get company info if user has company_id
             company_info = None
@@ -77,10 +81,12 @@ class LoginSystem:
                     "access_token": access_token
                 }
             )
-
+        except AuthorizationError as e:
+            self.db.rollback()
+            raise e
         except Exception as e:
             self.db.rollback()
-            raise LoginError(f"Login failed: {str(e)}")
+            raise InternalServerError(f"An internal error occurred: {str(e)}")
 
     async def register(self, request: RegistrationRequest) -> RegistrationResponse:
         """Handle registration request"""

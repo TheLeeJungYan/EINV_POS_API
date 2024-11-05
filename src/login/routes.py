@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Request,status
 from sqlalchemy.orm import Session
 from .schemas import LoginRequest, RegistrationRequest, LoginResponse, RegistrationResponse
 from .main import LoginSystem
@@ -7,7 +7,7 @@ from src.database.main import get_db
 from src.database.models import USERS, USER_TYPES
 from typing import Dict
 from src.database.seeder import SECRET_KEY  # Import the same secret key
-
+from .exceptions import AuthorizationError, InternalServerError
 
 
 authentication_router = APIRouter();
@@ -23,8 +23,10 @@ async def login(
     try:
         login_system = LoginSystem(db, security_manager)
         return await login_system.login(request, client_request.client.host)
+    except AuthorizationError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 @authentication_router.post("/register", response_model=RegistrationResponse)
 async def register(
