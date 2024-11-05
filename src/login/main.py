@@ -1,16 +1,15 @@
 from datetime import datetime, timedelta
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 from src.database.models import COMPANIES, USERS, USER_TYPES
-from sqlalchemy import select, or_, join
+from sqlalchemy import select, or_
 from .schemas import LoginRequest, RegistrationRequest, LoginResponse, RegistrationResponse
-from .exceptions import LoginError, ValidationError, AuthenticationError, RegistrationError, AuthorizationError,InternalServerError
 from .validators import DataValidator
 from .security import SecurityManager
+from fastapi import HTTPException
 from typing import Dict, Any
 
 class LoginSystem:
     def __init__(self, db_session: Session, security_manager: SecurityManager):
-        """Initialize login system with database session and security manager"""
         self.db = db_session
         self.security = security_manager
         self.validator = DataValidator()
@@ -31,13 +30,17 @@ class LoginSystem:
             result = self.db.execute(stmt).first()
 
             if not result:
-                raise AuthorizationError("Invalid username or password")
-                return
+                raise HTTPException(
+                    status_code=401,
+                    detail="Invalid username or password"
+                )
 
-            user, user_type = result  # Get both user and user_type objects
+            user, user_type = result
             if not self.security.verify_password(request.password, user.PASSWORD):
-                raise AuthorizationError("Invalid username or password")
-                return
+                raise HTTPException(
+                    status_code=401,
+                    detail="Invalid username or password"
+                )
 
             # Get company info if user has company_id
             company_info = None
@@ -76,32 +79,51 @@ class LoginSystem:
                     "access_token": access_token
                 }
             )
-        except AuthorizationError as e:
+
+        except HTTPException:
             self.db.rollback()
-            raise e
+            raise
         except Exception as e:
             self.db.rollback()
-            raise InternalServerError(f"An internal error occurred: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"An internal error occurred: {str(e)}"
+            )
 
     async def register(self, request: RegistrationRequest) -> RegistrationResponse:
         """Handle registration request"""
         try:
             # Validate fields
             if not self.validator.validate_email(request.email):
-                raise ValidationError("Invalid email format")
+                raise HTTPException(
+                    status_code=422,
+                    detail="Invalid email format"
+                )
 
             if not self.validator.validate_ic_number(request.owner_ic_number):
-                raise ValidationError("Invalid IC number format")
+                raise HTTPException(
+                    status_code=422,
+                    detail="Invalid IC number format"
+                )
 
             if not self.validator.validate_phone_number(request.phone_number):
-                raise ValidationError("Invalid phone number format")
+                raise HTTPException(
+                    status_code=422,
+                    detail="Invalid phone number format"
+                )
 
             if not self.validator.validate_postal_code(request.postal_code):
-                raise ValidationError("Invalid postal code format")
+                raise HTTPException(
+                    status_code=422,
+                    detail="Invalid postal code format"
+                )
 
             is_valid_password, password_message = self.validator.validate_password(request.password)
             if not is_valid_password:
-                raise ValidationError(password_message)
+                raise HTTPException(
+                    status_code=422,
+                    detail=password_message
+                )
 
             # Check for existing records
             existing = self.db.execute(
@@ -114,8 +136,9 @@ class LoginSystem:
             ).first()
 
             if existing:
-                raise RegistrationError(
-                    "IC number or business registration number already exists"
+                raise HTTPException(
+                    status_code=409,
+                    detail="IC number or business registration number already exists"
                 )
 
             # Create new company record
@@ -137,15 +160,14 @@ class LoginSystem:
             )
 
             self.db.add(new_company)
-            self.db.flush()  # Get the company ID
+            self.db.flush()
 
-            # Create new user record
             # Create new user record
             new_user = USERS(
                 USERNAME=request.username,
                 EMAIL=request.email,
                 PASSWORD=self.security.hash_password(request.password),
-                USER_TYPE_ID=2,  # Changed to USER_TYPE_ID
+                USER_TYPE_ID=2,  # Company user type
                 COMPANY_ID=new_company.ID,
                 CREATED_AT=datetime.utcnow(),
                 UPDATED_AT=datetime.utcnow()
@@ -159,12 +181,12 @@ class LoginSystem:
                 message="Registration completed successfully"
             )
 
-        except ValidationError as e:
+        except HTTPException:
             self.db.rollback()
-            return RegistrationResponse(success=False, message=str(e))
-        except RegistrationError as e:
-            self.db.rollback()
-            return RegistrationResponse(success=False, message=str(e))
+            raise
         except Exception as e:
             self.db.rollback()
-            raise RegistrationError(f"Failed to complete registration: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to complete registration: {str(e)}"
+            )
