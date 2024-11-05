@@ -7,7 +7,7 @@ from .validators import DataValidator
 from .security import SecurityManager
 from fastapi import HTTPException
 from typing import Dict, Any
-
+from .exceptions import AuthorizationError
 class LoginSystem:
     def __init__(self, db_session: Session, security_manager: SecurityManager):
         self.db = db_session
@@ -30,17 +30,11 @@ class LoginSystem:
             result = self.db.execute(stmt).first()
 
             if not result:
-                raise HTTPException(
-                    status_code=401,
-                    detail="Invalid username or password"
-                )
+                raise AuthorizationError("Invalid username or password")
 
             user, user_type = result
             if not self.security.verify_password(request.password, user.PASSWORD):
-                raise HTTPException(
-                    status_code=401,
-                    detail="Invalid username or password"
-                )
+                raise AuthorizationError("Invalid username or password")
 
             # Get company info if user has company_id
             company_info = None
@@ -80,9 +74,9 @@ class LoginSystem:
                 }
             )
 
-        except HTTPException:
+        except AuthorizationError as e:
             self.db.rollback()
-            raise
+            raise e
         except Exception as e:
             self.db.rollback()
             raise HTTPException(
