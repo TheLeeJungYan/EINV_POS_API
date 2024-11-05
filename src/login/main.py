@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from src.database.models import COMPANIES, USERS
 from sqlalchemy import select, or_
@@ -7,7 +7,7 @@ from .exceptions import LoginError, ValidationError, AuthenticationError, Regist
 from .validators import DataValidator
 from .security import SecurityManager
 from typing import Dict, Any
-
+from fastapi import status
 class LoginSystem:
     def __init__(self, db_session: Session, security_manager: SecurityManager):
         """Initialize login system with database session and security manager"""
@@ -30,16 +30,18 @@ class LoginSystem:
             if not result:
                 return LoginResponse(
                     success=False,
-                    message="User not found. Would you like to register?",
-                    data=None
+                    message="Invalid username or password",
+                    data=None,
+                    status_code=status.HTTP_401_UNAUTHORIZED
                 )
 
             user = result[0]  # Get the user object
             if not self.security.verify_password(request.password, user.PASSWORD):
                 return LoginResponse(
                     success=False,
-                    message="Invalid password",
-                    data=None
+                    message="Invalid username or password",
+                    data=None,
+                    status_code=status.HTTP_401_UNAUTHORIZED
                 )
 
             # Get company info if user has company_id
@@ -57,7 +59,8 @@ class LoginSystem:
 
             # Create access token
             access_token = self.security.create_access_token(
-                data={"sub": str(user.ID), "username": user.USERNAME}
+                data={"sub": str(user.ID), "username": user.USERNAME},
+                expires_delta=timedelta(hours=24)
             )
 
             return LoginResponse(

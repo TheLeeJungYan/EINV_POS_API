@@ -66,6 +66,7 @@ class PRODUCTS(Base):
     COMPANY_ID = Column(Integer, ForeignKey('COMPANIES.ID'))
     NAME = Column(String(255))
     CATEGORY = Column(String(255))
+    DESCRIPTION = Column(String(255))
     PRICE = Column(Integer)
     IMAGE = Column(String(255))
     CREATED_AT = Column(TIMESTAMP)
@@ -105,6 +106,7 @@ class PRODUCT_OPTION_VALUES(Base):
     ID = Column(Integer, primary_key=True, index=True)
     OPTION_ID= Column(Integer, ForeignKey('PRODUCT_OPTIONS.ID'))
     VALUE = Column(String(255),nullable=False)
+    # description
     PRICE = Column(Integer,nullable=False)
     DEFAULT = Column(Boolean,nullable=False)
     CREATED_AT = Column(TIMESTAMP)

@@ -1,26 +1,28 @@
 from pydantic import BaseModel
 from typing import List
-from pydantic import BaseModel, Field
+
+# For basic product response
 class Product(BaseModel):
-    ID:int
-    NAME:str
-    CATEGORY:str
-    PRICE:int
+    ID: int
+    NAME: str
+    CATEGORY: str
+    PRICE: int
 
-class Option(BaseModel):
-    option: str
-    desc: str
-    price: str
+# For option values
+class OptionValue(BaseModel):
+    name: str
+    price: float
+    default: bool = False
 
+# For option groups
 class OptionGroup(BaseModel):
     name: str
-    collapse: bool
-    default: str
-    options: List[Option]
+    values: List[OptionValue]
 
+# For product creation request
 class ProductCreateRequest(BaseModel):
     name: str
     description: str
-    category: int
+    category: str
     price: float
-    optionGroups: List[OptionGroup] = Field(default_factory=list)
+    optionGroups: List[OptionGroup] = []
