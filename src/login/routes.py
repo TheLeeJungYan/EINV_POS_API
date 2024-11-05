@@ -8,12 +8,11 @@ from typing import Dict
 from src.database.seeder import SECRET_KEY  # Import the same secret key
 
 
-app = FastAPI()
 
-router = APIRouter()
+authentication_router = APIRouter();
 security_manager = SecurityManager(SECRET_KEY)
 
-@router.post("/login", response_model=LoginResponse)
+@authentication_router.post("/login", response_model=LoginResponse)
 async def login(
     request: LoginRequest,
     client_request: Request,
@@ -26,7 +25,7 @@ async def login(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@router.post("/register", response_model=RegistrationResponse)
+@authentication_router.post("/register", response_model=RegistrationResponse)
 async def register(
     request: RegistrationRequest,
     db: Session = Depends(get_db)
@@ -38,5 +37,4 @@ async def register(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-# Include the router in the FastAPI app
-app.include_router(router)
+#

@@ -4,6 +4,7 @@ import src.database.models as models
 from typing import Annotated
 from fastapi.middleware.cors import CORSMiddleware
 from src.products.routes import product_router
+from src.login.routes import authentication_router
 models.Base.metadata.create_all(bind=engine)
 version = "v1"
 app = FastAPI(
@@ -22,3 +23,4 @@ app.add_middleware(
 get_db()
 
 app.include_router(product_router,prefix="/api/{version}",tags=['products'])
+app.include_router(authentication_router,prefix="/api/{version}",tags=['authentication'])
