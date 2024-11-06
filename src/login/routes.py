@@ -10,7 +10,7 @@ from src.database.seeder import SECRET_KEY  # Import the same secret key
 from .exceptions import AuthorizationError, InternalServerError
 
 
-authentication_router = APIRouter()
+authentication_router = APIRouter();
 security_manager = SecurityManager(SECRET_KEY)
 
 @authentication_router.post("/login", response_model=LoginResponse)

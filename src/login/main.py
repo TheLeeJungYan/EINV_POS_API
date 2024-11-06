@@ -7,7 +7,7 @@ from .validators import DataValidator
 from .security import SecurityManager
 from fastapi import HTTPException
 from typing import Dict, Any
-from .exceptions import AuthorizationError
+
 class LoginSystem:
     def __init__(self, db_session: Session, security_manager: SecurityManager):
         self.db = db_session
@@ -30,11 +30,17 @@ class LoginSystem:
             result = self.db.execute(stmt).first()
 
             if not result:
-                raise AuthorizationError("Invalid username or password")
+                raise HTTPException(
+                    status_code=401,
+                    detail="Invalid username or password"
+                )
 
             user, user_type = result
             if not self.security.verify_password(request.password, user.PASSWORD):
-                raise AuthorizationError("Invalid username or password")
+                raise HTTPException(
+                    status_code=401,
+                    detail="Invalid username or password"
+                )
 
             # Get company info if user has company_id
             company_info = None
@@ -51,9 +57,15 @@ class LoginSystem:
 
             # Create access token
             access_token = self.security.create_access_token(
-                data={"sub": str(user.ID), "username": user.USERNAME},
-                expires_delta=timedelta(hours=24)
-            )
+            data={
+                "sub": str(user.ID),
+                "username": user.USERNAME,
+                "email": user.EMAIL,
+                "company_id": str(user.COMPANY_ID) if user.COMPANY_ID else None,
+                "user_type_id": str(user.USER_TYPE_ID)
+            },
+            expires_delta=timedelta(hours=24)
+        )
 
             return LoginResponse(
                 success=True,
@@ -74,9 +86,9 @@ class LoginSystem:
                 }
             )
 
-        except AuthorizationError as e:
+        except HTTPException:
             self.db.rollback()
-            raise e
+            raise
         except Exception as e:
             self.db.rollback()
             raise HTTPException(

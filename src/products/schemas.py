@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional  # Add Optional import
 
 # For basic product response
 class Product(BaseModel):
@@ -10,15 +10,15 @@ class Product(BaseModel):
 
 # For option values
 class OptionValue(BaseModel):
-    option: str
-    desc: str
+    name: str
+    description: Optional[str] = "" 
     price: float
+    default: bool
 
 # For option groups
 class OptionGroup(BaseModel):
     name: str
-    default:int
-    options: List[OptionValue]
+    values: List[OptionValue]
 
 # For product creation request
 class ProductCreateRequest(BaseModel):

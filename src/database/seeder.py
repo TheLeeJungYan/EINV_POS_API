@@ -125,7 +125,7 @@ def seed_database():
         print("Seeding company...")
         company = COMPANIES(
             OWNER_FULL_NAME="John Doe",
-            OWNER_IC_NUMBER="123456-78-9012",  # Updated to match format
+            OWNER_IC_NUMBER="123456-78-9012",
             OWNER_BIRTH_DATE=date(1990, 1, 1),
             PHONE_NUMBER="+60123456789",
             ADDRESS_LINE1="123 Main Street",
@@ -197,7 +197,8 @@ def seed_database():
             PRODUCTS(
                 COMPANY_ID=company.ID,
                 NAME="Burger",
-                CATEGORY="Food",
+                CATEGORY=categories[0].NAME,  # Using the Food category
+                DESCRIPTION="Delicious beef burger",
                 PRICE=1000,  # RM10.00
                 IMAGE="burger.jpg",
                 CREATED_AT=datetime.now(),
@@ -206,7 +207,8 @@ def seed_database():
             PRODUCTS(
                 COMPANY_ID=company.ID,
                 NAME="Coca Cola",
-                CATEGORY="Drinks",
+                CATEGORY=categories[1].NAME,  # Using the Drinks category
+                DESCRIPTION="Refreshing cola drink",
                 PRICE=300,  # RM3.00
                 IMAGE="coke.jpg",
                 CREATED_AT=datetime.now(),
@@ -216,31 +218,33 @@ def seed_database():
         db.add_all(products)
         db.flush()
 
-        # 8. Seed Product Options
-        print("Seeding product options...")
+        # 8. Seed Product Options Groups
+        print("Seeding product options groups...")
         for product in products:
-            size_option = PRODUCT_OPTIONS_GROUPS(
+            size_option_group = PRODUCT_OPTIONS_GROUPS(
                 PRODUCT_ID=product.ID,
-                OPTION="Size",
+                OPTION_GROUP="Size",  # Changed from OPTION to OPTION_GROUP
                 CREATED_AT=datetime.now(),
                 UPDATED_AT=datetime.now()
             )
-            db.add(size_option)
+            db.add(size_option_group)
             db.flush()
 
-            # 9. Seed Product Option Values
+            # 9. Seed Product Options
             option_values = [
                 PRODUCT_OPTIONS(
-                    OPTION_ID=size_option.ID,
-                    VALUE="Small",
+                    PRODUCT_OPTION_GROUP_ID=size_option_group.ID,  # Changed from OPTION_ID
+                    OPTION="Small",  # Changed from VALUE
+                    DESCRIPTION="Small size portion",
                     PRICE=0,
                     DEFAULT=True,
                     CREATED_AT=datetime.now(),
                     UPDATED_AT=datetime.now()
                 ),
                 PRODUCT_OPTIONS(
-                    OPTION_ID=size_option.ID,
-                    VALUE="Large",
+                    PRODUCT_OPTION_GROUP_ID=size_option_group.ID,  # Changed from OPTION_ID
+                    OPTION="Large",  # Changed from VALUE
+                    DESCRIPTION="Large size portion",
                     PRICE=200,  # RM2.00 extra
                     DEFAULT=False,
                     CREATED_AT=datetime.now(),
@@ -248,6 +252,7 @@ def seed_database():
                 )
             ]
             db.add_all(option_values)
+            db.flush()
 
         # 10. Create Sample Transaction
         print("Creating sample transaction...")
@@ -256,7 +261,7 @@ def seed_database():
             PRODUCT_ID=products[0].ID,  # Burger
             PAYMENT_TYPE_ID=payment_types[0].ID,  # CASH
             AMOUNT=1200,  # RM12.00 (Burger + Large size)
-            SELECTED_OPTIONS={"size": "Large"},
+            SELECTED_OPTIONS={"Size": "Large"},  # Updated to match the option group name
             PAYMENT_REFERENCE="CASH-001",
             CREATED_AT=datetime.now()
         )
