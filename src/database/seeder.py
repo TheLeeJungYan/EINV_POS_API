@@ -2,7 +2,7 @@ from datetime import datetime, date
 from src.database.main import SessionLocal
 from src.database.models import (
     USER_TYPES, USERS, COMPANIES, CATEGORIES, PRODUCTS, 
-    PAYMENT_TYPES, PRODUCT_OPTIONS, PRODUCT_OPTION_VALUES,
+    PAYMENT_TYPES, PRODUCT_OPTIONS_GROUPS, PRODUCT_OPTIONS,
     TRANSACTIONS
 )
 from src.login.security import SecurityManager
@@ -16,8 +16,8 @@ def seed_database():
     try:
         # Clear existing data (optional, but helps prevent duplicates)
         db.query(TRANSACTIONS).delete()
-        db.query(PRODUCT_OPTION_VALUES).delete()
         db.query(PRODUCT_OPTIONS).delete()
+        db.query(PRODUCT_OPTIONS_GROUPS).delete()
         db.query(PRODUCTS).delete()
         db.query(CATEGORIES).delete()
         db.query(USERS).delete()
@@ -219,7 +219,7 @@ def seed_database():
         # 8. Seed Product Options
         print("Seeding product options...")
         for product in products:
-            size_option = PRODUCT_OPTIONS(
+            size_option = PRODUCT_OPTIONS_GROUPS(
                 PRODUCT_ID=product.ID,
                 OPTION="Size",
                 CREATED_AT=datetime.now(),
@@ -230,7 +230,7 @@ def seed_database():
 
             # 9. Seed Product Option Values
             option_values = [
-                PRODUCT_OPTION_VALUES(
+                PRODUCT_OPTIONS(
                     OPTION_ID=size_option.ID,
                     VALUE="Small",
                     PRICE=0,
@@ -238,7 +238,7 @@ def seed_database():
                     CREATED_AT=datetime.now(),
                     UPDATED_AT=datetime.now()
                 ),
-                PRODUCT_OPTION_VALUES(
+                PRODUCT_OPTIONS(
                     OPTION_ID=size_option.ID,
                     VALUE="Large",
                     PRICE=200,  # RM2.00 extra

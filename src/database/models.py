@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, String, Integer, TIMESTAMP, Column, ForeignKey, JSON, Table, Date
+from sqlalchemy import Boolean, String, Integer, TIMESTAMP, Column, ForeignKey, JSON, Table, Date,Text
 from sqlalchemy.orm import relationship
 from src.database.main import Base
 
@@ -66,7 +66,7 @@ class PRODUCTS(Base):
     COMPANY_ID = Column(Integer, ForeignKey('COMPANIES.ID'))
     NAME = Column(String(255))
     CATEGORY = Column(String(255))
-    DESCRIPTION = Column(String(255))
+    DESCRIPTION = Column(Text)
     PRICE = Column(Integer)
     IMAGE = Column(String(255))
     CREATED_AT = Column(TIMESTAMP)
@@ -92,21 +92,21 @@ class TRANSACTIONS(Base):
     PAYMENT_REFERENCE = Column(String(255), nullable=True)  # For payment references/receipts
     CREATED_AT = Column(TIMESTAMP)
 
-class PRODUCT_OPTIONS(Base):
-    __tablename__ = 'PRODUCT_OPTIONS'
+class PRODUCT_OPTIONS_GROUPS(Base):
+    __tablename__ = 'PRODUCT_OPTIONS_GROUPS'
     ID = Column(Integer, primary_key=True, index=True)
     PRODUCT_ID = Column(Integer, ForeignKey('PRODUCTS.ID'))
-    OPTION = Column(String(255), nullable=False)
+    OPTION_GROUP = Column(String(255), nullable=False)
     CREATED_AT = Column(TIMESTAMP)
     UPDATED_AT = Column(TIMESTAMP)
     DELETED_AT = Column(TIMESTAMP)
 
-class PRODUCT_OPTION_VALUES(Base):
-    __tablename__ = "PRODUCT_OPTION_VALUES"
+class PRODUCT_OPTIONS(Base):
+    __tablename__ = "PRODUCT_OPTION"
     ID = Column(Integer, primary_key=True, index=True)
-    OPTION_ID= Column(Integer, ForeignKey('PRODUCT_OPTIONS.ID'))
-    VALUE = Column(String(255),nullable=False)
-    # description
+    PRODUCT_OPTION_GROUP_ID= Column(Integer, ForeignKey('PRODUCT_OPTIONS_GROUPS.ID'))
+    OPTION = Column(String(255),nullable=False)
+    DESCRIPTION = Column(Text)
     PRICE = Column(Integer,nullable=False)
     DEFAULT = Column(Boolean,nullable=False)
     CREATED_AT = Column(TIMESTAMP)

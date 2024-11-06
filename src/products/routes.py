@@ -1,7 +1,7 @@
 from fastapi import APIRouter, status, Depends, Form, File, UploadFile, HTTPException
-from typing import List
+from typing import List, Optional
 from sqlalchemy.orm import Session
-from src.database.models import PRODUCTS, PRODUCT_OPTIONS, PRODUCT_OPTION_VALUES
+from src.database.models import PRODUCTS, PRODUCT_OPTIONS, PRODUCT_OPTIONS_GROUPS
 from src.database.main import get_db
 from src.products.schemas import OptionGroup
 from datetime import datetime
@@ -33,10 +33,11 @@ async def create_product(
     category: str = Form(...),
     price: float = Form(...),
     file: UploadFile = File(...),
-    optionGroups: List[str] = Form(...),
+    optionGroups: Optional[List[str]] = Form([]),
     db: Session = Depends(get_db)
 ):
     try:
+    
         # Input validation
         if price <= 0:
             raise HTTPException(
@@ -55,19 +56,20 @@ async def create_product(
             contents = await file.read()
             upload_result = cloudinary.uploader.upload(contents)
             image_url = upload_result['secure_url']
+            
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to upload image: {str(e)}"
             )
-
+    
         try:
-            # Create the product
+          
             new_product = PRODUCTS(
-                COMPANY_ID=3,  # Hardcoded company ID
+                COMPANY_ID=1,  # Hardcoded company ID
                 NAME=name,
                 DESCRIPTION=description,
-                CATEGORY=category,
+                CATEGORY=int(category),
                 PRICE=int(price * 100),
                 IMAGE=image_url,
                 CREATED_AT=datetime.utcnow(),
@@ -75,7 +77,7 @@ async def create_product(
             )
             db.add(new_product)
             db.flush()
-            
+          
             # If no option groups provided, commit and return
             if not optionGroups:
                 db.commit()
@@ -93,6 +95,7 @@ async def create_product(
             for group_json in optionGroups:
                 try:
                     group = OptionGroup.parse_raw(group_json)
+                    print(group)
                 except Exception as e:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
@@ -100,9 +103,9 @@ async def create_product(
                     )
 
                 # Create option group
-                option = PRODUCT_OPTIONS(
+                option = PRODUCT_OPTIONS_GROUPS(
                     PRODUCT_ID=new_product.ID,
-                    OPTION=group.name,
+                    OPTION_GROUP=group.name,
                     CREATED_AT=datetime.utcnow(),
                     UPDATED_AT=datetime.utcnow()
                 )
@@ -110,9 +113,10 @@ async def create_product(
                 db.flush()
 
                 # Validate option values
-                has_default = False
-                for value in group.values:
-                    if value.default:
+                default = int(group.default)
+                default_val = False
+                for index,value in group.options:
+                    if index == default:
                         has_default = True
                     if value.price < 0:
                         raise HTTPException(
@@ -121,11 +125,12 @@ async def create_product(
                         )
 
                     # Create option value
-                    option_value = PRODUCT_OPTION_VALUES(
-                        OPTION_ID=option.ID,
-                        VALUE=value.name,
+                    option_value = PRODUCT_OPTIONS(
+                        PRODUCT_OPTION_GROUP_ID=option.ID,
+                        OPTION=value.name,
+                        DESCRIPTION=value.desc,
                         PRICE=int(value.price * 100),
-                        DEFAULT=value.default,
+                        DEFAULT=has_default,
                         CREATED_AT=datetime.utcnow(),
                         UPDATED_AT=datetime.utcnow()
                     )
@@ -178,11 +183,11 @@ async def get_product(product_id: int, db: Session = Depends(get_db)):
         )
     
     # Get the options for this product
-    options = db.query(PRODUCT_OPTIONS).filter(PRODUCT_OPTIONS.PRODUCT_ID == product_id).all()
+    options = db.query(PRODUCT_OPTIONS_GROUPS).filter(PRODUCT_OPTIONS_GROUPS.PRODUCT_ID == product_id).all()
     
     option_data = []
     for option in options:
-        values = db.query(PRODUCT_OPTION_VALUES).filter(PRODUCT_OPTION_VALUES.OPTION_ID == option.ID).all()
+        values = db.query(PRODUCT_OPTIONS).filter(PRODUCT_OPTIONS.PRODUCT_OPTION_GROUP_ID == option.ID).all()
         option_data.append({
             "name": option.OPTION,
             "values": [{
