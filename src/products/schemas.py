@@ -10,15 +10,15 @@ class Product(BaseModel):
 
 # For option values
 class OptionValue(BaseModel):
-    name: str
-    description: Optional[str] = "" 
+    option: str
+    desc: Optional[str] = "" 
     price: float
-    default: bool
 
 # For option groups
 class OptionGroup(BaseModel):
     name: str
-    values: List[OptionValue]
+    default: int
+    options: List[OptionValue]
 
 # For product creation request
 class ProductCreateRequest(BaseModel):

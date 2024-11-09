@@ -67,7 +67,7 @@ async def create_product(
     try:
         # Get current user
         current_user = get_current_user(credentials.credentials, db)
-
+       
         # Input validation
         if price <= 0:
             return JSONResponse(
@@ -95,7 +95,7 @@ async def create_product(
         try:
             # Create the product
             new_product = PRODUCTS(
-                COMPANY_ID=2,
+                COMPANY_ID=current_user.COMPANY_ID,
                 NAME=name,
                 DESCRIPTION=description,
                 CATEGORY=category,
@@ -130,22 +130,25 @@ async def create_product(
 
                 # Process each value in the group
                 has_default = False
-                for value in group.values:
-                    if value.default:
+                for index,option in enumerate(group.options):
+                    if index==group.default:
+                        default = True
                         has_default = True
-                    if value.price < 0:
+                    else:
+                        default = False
+                    if option.price < 0:
                         db.rollback()
                         return JSONResponse(
                             status_code=status.HTTP_400_BAD_REQUEST,
-                            content={"status": "error", "message": f"Price cannot be negative for option '{value.name}'"}
+                            content={"status": "error", "message": f"Price cannot be negative for option '{option.option}'"}
                         )
 
                     option = PRODUCT_OPTIONS(
                         PRODUCT_OPTION_GROUP_ID=option_group.ID,
-                        OPTION=value.name,
-                        DESCRIPTION=value.description,
-                        PRICE=int(value.price * 100),
-                        DEFAULT=value.default,
+                        OPTION=option.option,
+                        DESCRIPTION=option.desc,
+                        PRICE=int(option.price * 100),
+                        DEFAULT=default,
                         CREATED_AT=datetime.utcnow(),
                         UPDATED_AT=datetime.utcnow()
                     )
