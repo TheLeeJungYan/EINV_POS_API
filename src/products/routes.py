@@ -300,7 +300,7 @@ async def get_products(
             content={"status": "error", "message": str(e)}
         )
 
-@product_router.put('/product/{product_id}', status_code=status.HTTP_200_OK)
+@product_router.put('/product/{product_id}')
 async def update_product(
     product_id: int,
     credentials: HTTPAuthorizationCredentials = Security(security),
@@ -312,42 +312,32 @@ async def update_product(
     optionGroups: List[str] = Form(None),
     db: Session = Depends(get_db)
 ):
+    # Get current user
+    current_user = get_current_user(credentials.credentials, db)
+    
+    # Get product
+    product = db.query(PRODUCTS).filter(
+        PRODUCTS.ID == product_id,
+        PRODUCTS.DELETED_AT.is_(None)
+    ).first()
+    
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    if product.COMPANY_ID != current_user.COMPANY_ID:
+        raise HTTPException(status_code=403, detail="Not authorized to modify this product")
+
     try:
-        # Get current user
-        current_user = get_current_user(credentials.credentials, db)
-        
-        # Check if product exists
-        product = db.query(PRODUCTS).filter(
-            PRODUCTS.ID == product_id,
-            PRODUCTS.DELETED_AT.is_(None)
-        ).first()
-        
-        if not product:
-            return JSONResponse(
-                status_code=status.HTTP_404_NOT_FOUND,
-                content={"status": "error", "message": "Product not found"}
-            )
-
-        # Check if user has permission
-        if product.COMPANY_ID != current_user.COMPANY_ID:
-            return JSONResponse(
-                status_code=status.HTTP_403_FORBIDDEN,
-                content={"status": "error", "message": "You don't have permission to modify this product"}
-            )
-
-        # Update image if new file is provided
+        # Update image if provided
         if file and file.filename:
             try:
                 contents = await file.read()
                 upload_result = cloudinary.uploader.upload(contents)
                 product.IMAGE = upload_result['secure_url']
-            except Exception as e:
-                return JSONResponse(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    content={"status": "error", "message": f"Failed to upload image: {str(e)}"}
-                )
+            except Exception:
+                raise HTTPException(status_code=500, detail="Failed to upload image")
 
-        # Update basic product details if provided
+        # Update basic details
         if name is not None:
             product.NAME = name
         if description is not None:
@@ -356,160 +346,180 @@ async def update_product(
             product.CATEGORY = category
         if price is not None:
             if price <= 0:
-                return JSONResponse(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    content={"status": "error", "message": "Price must be greater than 0"}
-                )
+                raise HTTPException(status_code=400, detail="Price must be greater than 0")
             product.PRICE = int(price * 100)
 
-        product.UPDATED_AT = datetime.utcnow()
+        product.UPDATED_AT = datetime.now()
 
-        # Update option groups if provided
+        # Update options if provided
         if optionGroups is not None:
-            # Soft delete existing options and their values
-            current_time = datetime.utcnow()
+            current_time = datetime.now()
             
-            # Get all existing option groups
+            # Get existing option groups
             existing_groups = db.query(PRODUCT_OPTIONS_GROUPS).filter(
                 PRODUCT_OPTIONS_GROUPS.PRODUCT_ID == product_id,
                 PRODUCT_OPTIONS_GROUPS.DELETED_AT.is_(None)
             ).all()
             
-            for group in existing_groups:
-                # Soft delete options
+            # Create maps for comparison
+            existing_groups_map = {group.OPTION_GROUP: group for group in existing_groups}
+            new_groups_map = {}
+            
+            # Parse all incoming groups
+            for group_json in optionGroups:
+                try:
+                    group = OptionGroup.parse_raw(group_json)
+                    new_groups_map[group.name] = group
+                except Exception:
+                    raise HTTPException(status_code=400, detail="Invalid option group format")
+            
+            # Handle groups to be deleted
+            groups_to_delete = set(existing_groups_map.keys()) - set(new_groups_map.keys())
+            for group_name in groups_to_delete:
+                group = existing_groups_map[group_name]
+                # Soft delete the group and its options
                 db.query(PRODUCT_OPTIONS).filter(
                     PRODUCT_OPTIONS.PRODUCT_OPTION_GROUP_ID == group.ID,
                     PRODUCT_OPTIONS.DELETED_AT.is_(None)
                 ).update({PRODUCT_OPTIONS.DELETED_AT: current_time})
-                
-                # Soft delete option group
                 group.DELETED_AT = current_time
 
-            # Create new option groups
-            for group_json in optionGroups:
-                try:
-                    group = OptionGroup.parse_raw(group_json)
-                except Exception as e:
-                    return JSONResponse(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        content={"status": "error", "message": f"Invalid option group format: {str(e)}"}
+            # Handle groups to update or create
+            for group_name, new_group in new_groups_map.items():
+                existing_group = existing_groups_map.get(group_name)
+                
+                if existing_group:
+                    # Group exists - get its existing options
+                    existing_options = db.query(PRODUCT_OPTIONS).filter(
+                        PRODUCT_OPTIONS.PRODUCT_OPTION_GROUP_ID == existing_group.ID,
+                        PRODUCT_OPTIONS.DELETED_AT.is_(None)
+                    ).all()
+
+                    # Create map of existing options by name
+                    existing_options_map = {opt.OPTION: opt for opt in existing_options}
+
+                    # Update or create options
+                    default_index = int(new_group.default)
+                    for index, option_value in enumerate(new_group.options):
+                        if option_value.price < 0:
+                            raise HTTPException(status_code=400, 
+                                detail=f"Price cannot be negative for option '{option_value.option}'")
+
+                        existing_option = existing_options_map.get(option_value.option)
+                        
+                        if existing_option:
+                            # Update existing option
+                            existing_option.DESCRIPTION = option_value.desc
+                            existing_option.PRICE = int(option_value.price * 100)
+                            existing_option.DEFAULT = (index == default_index)
+                            existing_option.UPDATED_AT = current_time
+                        else:
+                            # Create new option if it doesn't exist
+                            new_option = PRODUCT_OPTIONS(
+                                PRODUCT_OPTION_GROUP_ID=existing_group.ID,
+                                OPTION=option_value.option,
+                                DESCRIPTION=option_value.desc,
+                                PRICE=int(option_value.price * 100),
+                                DEFAULT=(index == default_index),
+                                CREATED_AT=current_time,
+                                UPDATED_AT=current_time
+                            )
+                            db.add(new_option)
+
+                    # Soft delete options that no longer exist in the new group
+                    options_to_delete = set(existing_options_map.keys()) - {opt.option for opt in new_group.options}
+                    for option_name in options_to_delete:
+                        existing_options_map[option_name].DELETED_AT = current_time
+
+                    existing_group.UPDATED_AT = current_time
+                else:
+                    # Create new group and its options
+                    option_group = PRODUCT_OPTIONS_GROUPS(
+                        PRODUCT_ID=product_id,
+                        OPTION_GROUP=group_name,
+                        CREATED_AT=current_time,
+                        UPDATED_AT=current_time
                     )
+                    db.add(option_group)
+                    db.flush()
 
-                # Create option group
-                option_group = PRODUCT_OPTIONS_GROUPS(
-                    PRODUCT_ID=product_id,
-                    OPTION_GROUP=group.name,
-                    CREATED_AT=datetime.utcnow(),
-                    UPDATED_AT=datetime.utcnow()
-                )
-                db.add(option_group)
-                db.flush()
+                    default_index = int(new_group.default)
+                    for index, option_value in enumerate(new_group.options):
+                        if option_value.price < 0:
+                            raise HTTPException(status_code=400, 
+                                detail=f"Price cannot be negative for option '{option_value.option}'")
 
-                # Process options within the group
-                default_index = int(group.default)
-                for index, option_value in enumerate(group.options):
-                    if option_value.price < 0:
-                        return JSONResponse(
-                            status_code=status.HTTP_400_BAD_REQUEST,
-                            content={"status": "error", "message": f"Price cannot be negative for option '{option_value.option}'"}
+                        option = PRODUCT_OPTIONS(
+                            PRODUCT_OPTION_GROUP_ID=option_group.ID,
+                            OPTION=option_value.option,
+                            DESCRIPTION=option_value.desc,
+                            PRICE=int(option_value.price * 100),
+                            DEFAULT=(index == default_index),
+                            CREATED_AT=current_time,
+                            UPDATED_AT=current_time
                         )
-
-                    option = PRODUCT_OPTIONS(
-                        PRODUCT_OPTION_GROUP_ID=option_group.ID,
-                        OPTION=option_value.option,
-                        DESCRIPTION=option_value.desc,
-                        PRICE=int(option_value.price * 100),
-                        DEFAULT=(index == default_index),
-                        CREATED_AT=datetime.utcnow(),
-                        UPDATED_AT=datetime.utcnow()
-                    )
-                    db.add(option)
+                        db.add(option)
 
         db.commit()
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={
-                "status": "success",
-                "message": "Product updated successfully",
-                "data": {
-                    "product_id": product_id,
-                    "name": product.NAME,
-                    "image_url": product.IMAGE
-                }
-            }
-        )
+        return {
+            "product_id": product_id,
+            "name": product.NAME,
+            "image_url": product.IMAGE
+        }
 
-    except Exception as e:
+    except HTTPException:
         db.rollback()
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"status": "error", "message": f"Error updating product: {str(e)}"}
-        )
+        raise
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update product")
 
-@product_router.delete('/product/{product_id}', status_code=status.HTTP_200_OK)
+@product_router.delete('/product/{product_id}')
 async def delete_product(
     product_id: int,
     credentials: HTTPAuthorizationCredentials = Security(security),
     db: Session = Depends(get_db)
 ):
+    # Get current user
+    current_user = get_current_user(credentials.credentials, db)
+    
+    # Get product
+    product = db.query(PRODUCTS).filter(
+        PRODUCTS.ID == product_id,
+        PRODUCTS.DELETED_AT.is_(None)
+    ).first()
+    
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    if product.COMPANY_ID != current_user.COMPANY_ID:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this product")
+
     try:
-        # Get current user
-        current_user = get_current_user(credentials.credentials, db)
+        current_time = datetime.now()
         
-        # Check if product exists
-        product = db.query(PRODUCTS).filter(
-            PRODUCTS.ID == product_id,
-            PRODUCTS.DELETED_AT.is_(None)
-        ).first()
-        
-        if not product:
-            return JSONResponse(
-                status_code=status.HTTP_404_NOT_FOUND,
-                content={"status": "error", "message": "Product not found"}
-            )
+        # Soft delete options
+        db.query(PRODUCT_OPTIONS).filter(
+            PRODUCT_OPTIONS.PRODUCT_OPTION_GROUP_ID.in_(
+                db.query(PRODUCT_OPTIONS_GROUPS.ID).filter(
+                    PRODUCT_OPTIONS_GROUPS.PRODUCT_ID == product_id
+                )
+            ),
+            PRODUCT_OPTIONS.DELETED_AT.is_(None)
+        ).update({PRODUCT_OPTIONS.DELETED_AT: current_time})
 
-        # Check if user has permission
-        if product.COMPANY_ID != current_user.COMPANY_ID:
-            return JSONResponse(
-                status_code=status.HTTP_403_FORBIDDEN,
-                content={"status": "error", "message": "You don't have permission to delete this product"}
-            )
-
-        # Soft delete the product and its options
-        current_time = datetime.utcnow()
-        
-        # Get all option groups
-        option_groups = db.query(PRODUCT_OPTIONS_GROUPS).filter(
+        # Soft delete option groups
+        db.query(PRODUCT_OPTIONS_GROUPS).filter(
             PRODUCT_OPTIONS_GROUPS.PRODUCT_ID == product_id,
             PRODUCT_OPTIONS_GROUPS.DELETED_AT.is_(None)
-        ).all()
-        
-        for group in option_groups:
-            # Soft delete options
-            db.query(PRODUCT_OPTIONS).filter(
-                PRODUCT_OPTIONS.PRODUCT_OPTION_GROUP_ID == group.ID,
-                PRODUCT_OPTIONS.DELETED_AT.is_(None)
-            ).update({PRODUCT_OPTIONS.DELETED_AT: current_time})
-            
-            # Soft delete option group
-            group.DELETED_AT = current_time
+        ).update({PRODUCT_OPTIONS_GROUPS.DELETED_AT: current_time})
 
-        # Soft delete the product
+        # Soft delete product
         product.DELETED_AT = current_time
         
         db.commit()
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={
-                "status": "success",
-                "message": "Product deleted successfully",
-                "data": {"product_id": product_id}
-            }
-        )
+        return {"message": "Product deleted successfully"}
 
-    except Exception as e:
+    except Exception:
         db.rollback()
-        return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"status": "error", "message": f"Error deleting product: {str(e)}"}
-        )
+        raise HTTPException(status_code=500, detail="Failed to delete product")
