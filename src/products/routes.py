@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from typing import List, Optional
 from sqlalchemy.orm import Session
-from src.database.models import PRODUCTS, PRODUCT_OPTIONS, PRODUCT_OPTIONS_GROUPS, USERS
+from src.database.models import PRODUCTS, PRODUCT_OPTIONS, PRODUCT_OPTIONS_GROUPS, USERS, ProductStatus
 from src.database.seeder import SECRET_KEY
 from src.login.security import SecurityManager
 from src.database.main import get_db
@@ -11,6 +11,7 @@ from src.products.schemas import OptionGroup
 from datetime import datetime
 import cloudinary
 import cloudinary.uploader
+import uuid
 
 # Configure Cloudinary
 cloudinary.config( 
@@ -37,7 +38,7 @@ def get_current_user(token: str, db: Session):
             )
 
         # Get user from database
-        user = db.query(USERS).filter(USERS.ID == user_id).first()
+        user = db.query(USERS).filter(USERS.ID == uuid.UUID(user_id)).first()
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -51,7 +52,6 @@ def get_current_user(token: str, db: Session):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e)
         )
-
 
 @product_router.post('/product/create', status_code=status.HTTP_201_CREATED)
 async def create_product(
@@ -92,6 +92,8 @@ async def create_product(
                 content={"status": "error", "message": f"Failed to upload image: {str(e)}"}
             )
 
+        current_time = datetime.utcnow()
+
         try:
             # Create the product
             new_product = PRODUCTS(
@@ -101,8 +103,11 @@ async def create_product(
                 CATEGORY=category,
                 PRICE=int(price * 100),
                 IMAGE=image_url,
-                CREATED_AT=datetime.utcnow(),
-                UPDATED_AT=datetime.utcnow()
+                STATUS=ProductStatus.DRAFT,  # Set initial status as DRAFT
+                CREATED_BY=current_user.ID,
+                UPDATED_BY=current_user.ID,
+                CREATED_AT=current_time,
+                UPDATED_AT=current_time
             )
             db.add(new_product)
             db.flush()
@@ -122,16 +127,18 @@ async def create_product(
                 option_group = PRODUCT_OPTIONS_GROUPS(
                     PRODUCT_ID=new_product.ID,
                     OPTION_GROUP=group.name,
-                    CREATED_AT=datetime.utcnow(),
-                    UPDATED_AT=datetime.utcnow()
+                    CREATED_BY=current_user.ID,
+                    UPDATED_BY=current_user.ID,
+                    CREATED_AT=current_time,
+                    UPDATED_AT=current_time
                 )
                 db.add(option_group)
                 db.flush()
 
                 # Process each value in the group
                 has_default = False
-                for index,option in enumerate(group.options):
-                    if index==group.default:
+                for index, option in enumerate(group.options):
+                    if index == group.default:
                         default = True
                         has_default = True
                     else:
@@ -149,8 +156,10 @@ async def create_product(
                         DESCRIPTION=option.desc,
                         PRICE=int(option.price * 100),
                         DEFAULT=default,
-                        CREATED_AT=datetime.utcnow(),
-                        UPDATED_AT=datetime.utcnow()
+                        CREATED_BY=current_user.ID,
+                        UPDATED_BY=current_user.ID,
+                        CREATED_AT=current_time,
+                        UPDATED_AT=current_time
                     )
                     db.add(option)
 
@@ -168,9 +177,10 @@ async def create_product(
                     "status": "success",
                     "message": "Product created successfully",
                     "data": {
-                        "product_id": new_product.ID,
+                        "product_id": str(new_product.ID),  # Convert UUID to string
                         "name": name,
-                        "image_url": image_url
+                        "image_url": image_url,
+                        "status": new_product.STATUS.value
                     }
                 }
             )
@@ -190,7 +200,7 @@ async def create_product(
 
 @product_router.get('/product/{product_id}', status_code=status.HTTP_200_OK)
 async def get_product(
-    product_id: int,
+    product_id: uuid.UUID,  # Changed to UUID
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: Session = Depends(get_db)
 ):
@@ -241,13 +251,17 @@ async def get_product(
                 "status": "success",
                 "data": {
                     "product": {
-                        "id": product.ID,
+                        "id": str(product.ID),  # Convert UUID to string
                         "name": product.NAME,
                         "description": product.DESCRIPTION,
                         "category": product.CATEGORY,
                         "price": product.PRICE / 100,
                         "image_url": product.IMAGE,
+                        "status": product.STATUS.value,
                         "created_at": str(product.CREATED_AT),
+                        "created_by": str(product.CREATED_BY),
+                        "updated_at": str(product.UPDATED_AT),
+                        "updated_by": str(product.UPDATED_BY),
                         "is_owner": is_owner
                     },
                     "options": option_data
@@ -278,16 +292,23 @@ async def get_products(
             ).all()
         else:
             # If not authenticated, show all active products
-            products = db.query(PRODUCTS).filter(PRODUCTS.DELETED_AT.is_(None)).all()
+            products = db.query(PRODUCTS).filter(
+                PRODUCTS.DELETED_AT.is_(None),
+                PRODUCTS.STATUS == ProductStatus.ACTIVE  # Only show active products to public
+            ).all()
         
         products_data = [{
-            "id": product.ID,
+            "id": str(product.ID),  # Convert UUID to string
             "name": product.NAME,
             "category": product.CATEGORY,
             "description": product.DESCRIPTION,
             "price": product.PRICE / 100,
             "image_url": product.IMAGE,
-            "created_at": str(product.CREATED_AT)
+            "status": product.STATUS.value,
+            "created_at": str(product.CREATED_AT),
+            "created_by": str(product.CREATED_BY),
+            "updated_at": str(product.UPDATED_AT),
+            "updated_by": str(product.UPDATED_BY)
         } for product in products]
         
         return JSONResponse(
@@ -302,32 +323,35 @@ async def get_products(
 
 @product_router.put('/product/{product_id}')
 async def update_product(
-    product_id: int,
+    product_id: uuid.UUID,  # Changed to UUID
     credentials: HTTPAuthorizationCredentials = Security(security),
     name: str = Form(None),
     description: str = Form(None),
     category: str = Form(None),
     price: float = Form(None),
+    status: ProductStatus = Form(None),  # Added status field
     file: UploadFile = File(None),
     optionGroups: List[str] = Form(None),
     db: Session = Depends(get_db)
 ):
-    # Get current user
-    current_user = get_current_user(credentials.credentials, db)
-    
-    # Get product
-    product = db.query(PRODUCTS).filter(
-        PRODUCTS.ID == product_id,
-        PRODUCTS.DELETED_AT.is_(None)
-    ).first()
-    
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-
-    if product.COMPANY_ID != current_user.COMPANY_ID:
-        raise HTTPException(status_code=403, detail="Not authorized to modify this product")
-
     try:
+        # Get current user
+        current_user = get_current_user(credentials.credentials, db)
+        
+        # Get product
+        product = db.query(PRODUCTS).filter(
+            PRODUCTS.ID == product_id,
+            PRODUCTS.DELETED_AT.is_(None)
+        ).first()
+        
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+
+        if product.COMPANY_ID != current_user.COMPANY_ID:
+            raise HTTPException(status_code=403, detail="Not authorized to modify this product")
+
+        current_time = datetime.utcnow()
+
         # Update image if provided
         if file and file.filename:
             try:
@@ -348,13 +372,15 @@ async def update_product(
             if price <= 0:
                 raise HTTPException(status_code=400, detail="Price must be greater than 0")
             product.PRICE = int(price * 100)
+        if status is not None:
+            product.STATUS = status
 
-        product.UPDATED_AT = datetime.now()
+        # Update audit fields
+        product.UPDATED_BY = current_user.ID
+        product.UPDATED_AT = current_time
 
         # Update options if provided
         if optionGroups is not None:
-            current_time = datetime.now()
-            
             # Get existing option groups
             existing_groups = db.query(PRODUCT_OPTIONS_GROUPS).filter(
                 PRODUCT_OPTIONS_GROUPS.PRODUCT_ID == product_id,
@@ -381,8 +407,14 @@ async def update_product(
                 db.query(PRODUCT_OPTIONS).filter(
                     PRODUCT_OPTIONS.PRODUCT_OPTION_GROUP_ID == group.ID,
                     PRODUCT_OPTIONS.DELETED_AT.is_(None)
-                ).update({PRODUCT_OPTIONS.DELETED_AT: current_time})
+                ).update({
+                    PRODUCT_OPTIONS.DELETED_AT: current_time,
+                    PRODUCT_OPTIONS.UPDATED_AT: current_time,
+                    PRODUCT_OPTIONS.UPDATED_BY: current_user.ID
+                })
                 group.DELETED_AT = current_time
+                group.UPDATED_AT = current_time
+                group.UPDATED_BY = current_user.ID
 
             # Handle groups to update or create
             for group_name, new_group in new_groups_map.items():
@@ -413,14 +445,17 @@ async def update_product(
                             existing_option.PRICE = int(option_value.price * 100)
                             existing_option.DEFAULT = (index == default_index)
                             existing_option.UPDATED_AT = current_time
+                            existing_option.UPDATED_BY = current_user.ID
                         else:
-                            # Create new option if it doesn't exist
+                            # Create new option
                             new_option = PRODUCT_OPTIONS(
                                 PRODUCT_OPTION_GROUP_ID=existing_group.ID,
                                 OPTION=option_value.option,
                                 DESCRIPTION=option_value.desc,
                                 PRICE=int(option_value.price * 100),
                                 DEFAULT=(index == default_index),
+                                CREATED_BY=current_user.ID,
+                                UPDATED_BY=current_user.ID,
                                 CREATED_AT=current_time,
                                 UPDATED_AT=current_time
                             )
@@ -429,14 +464,20 @@ async def update_product(
                     # Soft delete options that no longer exist in the new group
                     options_to_delete = set(existing_options_map.keys()) - {opt.option for opt in new_group.options}
                     for option_name in options_to_delete:
-                        existing_options_map[option_name].DELETED_AT = current_time
+                        opt = existing_options_map[option_name]
+                        opt.DELETED_AT = current_time
+                        opt.UPDATED_AT = current_time
+                        opt.UPDATED_BY = current_user.ID
 
                     existing_group.UPDATED_AT = current_time
+                    existing_group.UPDATED_BY = current_user.ID
                 else:
                     # Create new group and its options
                     option_group = PRODUCT_OPTIONS_GROUPS(
                         PRODUCT_ID=product_id,
                         OPTION_GROUP=group_name,
+                        CREATED_BY=current_user.ID,
+                        UPDATED_BY=current_user.ID,
                         CREATED_AT=current_time,
                         UPDATED_AT=current_time
                     )
@@ -455,6 +496,8 @@ async def update_product(
                             DESCRIPTION=option_value.desc,
                             PRICE=int(option_value.price * 100),
                             DEFAULT=(index == default_index),
+                            CREATED_BY=current_user.ID,
+                            UPDATED_BY=current_user.ID,
                             CREATED_AT=current_time,
                             UPDATED_AT=current_time
                         )
@@ -462,9 +505,13 @@ async def update_product(
 
         db.commit()
         return {
-            "product_id": product_id,
-            "name": product.NAME,
-            "image_url": product.IMAGE
+            "status": "success",
+            "data": {
+                "product_id": str(product_id),
+                "name": product.NAME,
+                "image_url": product.IMAGE,
+                "status": product.STATUS.value
+            }
         }
 
     except HTTPException:
@@ -476,29 +523,29 @@ async def update_product(
 
 @product_router.delete('/product/{product_id}')
 async def delete_product(
-    product_id: int,
+    product_id: uuid.UUID,  # Changed to UUID
     credentials: HTTPAuthorizationCredentials = Security(security),
     db: Session = Depends(get_db)
 ):
-    # Get current user
-    current_user = get_current_user(credentials.credentials, db)
-    
-    # Get product
-    product = db.query(PRODUCTS).filter(
-        PRODUCTS.ID == product_id,
-        PRODUCTS.DELETED_AT.is_(None)
-    ).first()
-    
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-
-    if product.COMPANY_ID != current_user.COMPANY_ID:
-        raise HTTPException(status_code=403, detail="Not authorized to delete this product")
-
     try:
-        current_time = datetime.now()
+        # Get current user
+        current_user = get_current_user(credentials.credentials, db)
         
-        # Soft delete options
+        # Get product
+        product = db.query(PRODUCTS).filter(
+            PRODUCTS.ID == product_id,
+            PRODUCTS.DELETED_AT.is_(None)
+        ).first()
+        
+        if not product:
+            raise HTTPException(status_code=404, detail="Product not found")
+
+        if product.COMPANY_ID != current_user.COMPANY_ID:
+            raise HTTPException(status_code=403, detail="Not authorized to delete this product")
+
+        current_time = datetime.utcnow()
+        
+        # Soft delete options with audit trail
         db.query(PRODUCT_OPTIONS).filter(
             PRODUCT_OPTIONS.PRODUCT_OPTION_GROUP_ID.in_(
                 db.query(PRODUCT_OPTIONS_GROUPS.ID).filter(
@@ -506,20 +553,36 @@ async def delete_product(
                 )
             ),
             PRODUCT_OPTIONS.DELETED_AT.is_(None)
-        ).update({PRODUCT_OPTIONS.DELETED_AT: current_time})
+        ).update({
+            PRODUCT_OPTIONS.DELETED_AT: current_time,
+            PRODUCT_OPTIONS.UPDATED_AT: current_time,
+            PRODUCT_OPTIONS.UPDATED_BY: current_user.ID
+        })
 
-        # Soft delete option groups
+        # Soft delete option groups with audit trail
         db.query(PRODUCT_OPTIONS_GROUPS).filter(
             PRODUCT_OPTIONS_GROUPS.PRODUCT_ID == product_id,
             PRODUCT_OPTIONS_GROUPS.DELETED_AT.is_(None)
-        ).update({PRODUCT_OPTIONS_GROUPS.DELETED_AT: current_time})
+        ).update({
+            PRODUCT_OPTIONS_GROUPS.DELETED_AT: current_time,
+            PRODUCT_OPTIONS_GROUPS.UPDATED_AT: current_time,
+            PRODUCT_OPTIONS_GROUPS.UPDATED_BY: current_user.ID
+        })
 
-        # Soft delete product
+        # Soft delete product with audit trail
         product.DELETED_AT = current_time
+        product.UPDATED_AT = current_time
+        product.UPDATED_BY = current_user.ID
         
         db.commit()
-        return {"message": "Product deleted successfully"}
+        return {
+            "status": "success",
+            "message": "Product deleted successfully"
+        }
 
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception:
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to delete product")
