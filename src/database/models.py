@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, String, Integer, TIMESTAMP, Column, ForeignKey, JSON, Table, Date,Text
+from sqlalchemy import Boolean, String, Integer, TIMESTAMP, Column, ForeignKey, JSON, Table, Date,Text, FLOAT
 from sqlalchemy.orm import relationship
 from src.database.main import Base
 
@@ -67,7 +67,7 @@ class PRODUCTS(Base):
     NAME = Column(String(255))
     CATEGORY = Column(String(255))
     DESCRIPTION = Column(Text)
-    PRICE = Column(Integer)
+    PRICE = Column(FLOAT)
     IMAGE = Column(String(255))
     CREATED_AT = Column(TIMESTAMP)
     UPDATED_AT = Column(TIMESTAMP)
