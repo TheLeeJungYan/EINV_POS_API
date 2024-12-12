@@ -9,14 +9,13 @@ from datetime import datetime, date
 def seed():
     db = SessionLocal()
     try:
-        print('test')
         for product in products:
             new_product = PRODUCTS(
                 COMPANY_ID=2,
                 NAME=product['NAME'],
                 DESCRIPTION=product['DESCRIPTION'],
                 CATEGORY=product['CATEGORY'],
-                PRICE=float(product['PRICE']),
+                PRICE=float(product['PRICE']*100),
                 IMAGE=product['IMAGE'],
                 CREATED_AT=datetime.utcnow(),
                 UPDATED_AT=datetime.utcnow()
