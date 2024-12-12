@@ -133,7 +133,7 @@ products = [
     "CATEGORY": "Food",
     "DESCRIPTION": "Creamy tomato soup served with croutons.",
     "PRICE": 3.99,
-    "IMAGE": "https://example.com/images/tomato_soup.jpg"
+    "IMAGE": "https://www.inspiredtaste.net/wp-content/uploads/2022/09/Roasted-Tomato-Soup-Recipe-1-1200.jpg"
   },
   {
     "COMPANY_ID": 2,
@@ -141,7 +141,7 @@ products = [
     "CATEGORY": "Food",
     "DESCRIPTION": "Toasted bread with melted cheese inside.",
     "PRICE": 4.99,
-    "IMAGE": "https://example.com/images/grilled_cheese_sandwich.jpg"
+    "IMAGE": "https://cdn.loveandlemons.com/wp-content/uploads/2023/01/grilled-cheese.jpg"
   },
   {
     "COMPANY_ID": 2,
@@ -149,7 +149,7 @@ products = [
     "CATEGORY": "Food",
     "DESCRIPTION": "Crispy fried fish served with French fries.",
     "PRICE": 12.99,
-    "IMAGE": "https://example.com/images/fish_and_chips.jpg"
+    "IMAGE": "https://i0.wp.com/travelandmunchies.com/wp-content/uploads/2022/12/IMG_9513-scaled.jpg?fit=2560%2C1828&ssl=1"
   },
   {
     "COMPANY_ID": 2,
@@ -157,7 +157,7 @@ products = [
     "CATEGORY": "Food",
     "DESCRIPTION": "Salad with feta cheese, olives, and fresh vegetables.",
     "PRICE": 5.99,
-    "IMAGE": "https://example.com/images/greek_salad.jpg"
+    "IMAGE": "https://hips.hearstapps.com/hmg-prod/images/greek-salad-index-642f292397bbf.jpg?crop=0.6666666666666667xw:1xh;center,top&resize=1200:*"
   }
 ]
 
